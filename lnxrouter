@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# Enable strict error handling and fail fast on any errors.
+# Using 'set -euo pipefail' ensures that:
+#   - the script exits when a command returns a non-zero status (set -e)
+#   - attempts to use undefined variables cause the script to exit (set -u)
+#   - pipelines return the exit status of the rightmost command to exit with non-zero status (set -o pipefail)
+set -euo pipefail
+IFS=$'\n\t'
+
 VERSION=0.7.6
 PROGNAME="$(basename "$0")"
 
@@ -9,7 +17,7 @@ SCRIPT_UMASK=0122
 umask $SCRIPT_UMASK
 
 phead() {
-    echo "linux-router $VERSION (https://github.com/garywill/linux-router)"
+    echo "linux-router $VERSION (https://github.com/fitoori/linux-router)"
 }
 phead2() {
     echo "Released under LGPL, with no warranty. Use on your own risk."
@@ -1013,9 +1021,15 @@ iptb()
         HAND_UN_NC=1
     fi
     
-    
-    
     [[ ! "$NETFILTER_XT_MATCH_COMMENT" == "0" ]] && TAIL="-m comment --comment lrt${$}${SUBNET_IFACE}"
+
+    # Idempotent insert/append: if the rule already exists, skip adding it and
+    # avoid recording an undo entry for a no-op.
+    if [[ "$ACT" == "I" || "$ACT" == "A" ]]; then
+        if ${CMD_HEAD} ${MOUTH} ${NECK} -C "${CH}" "$@" ${TAIL} >/dev/null 2>&1; then
+            return 0
+        fi
+    fi
     
     if [[ "$ADD_TO_UNDO" -eq 1 ]]; then
         if [[ "$ACT" == "I" || "$ACT" == "A" ]]; then
@@ -1028,11 +1042,8 @@ iptb()
         fi
     fi
     
- 
-    
-
     FULL="$CMD_HEAD $MOUTH $NECK -${ACT} ${CH} $@ $TAIL"
-    #echo $FULL
+    # Execute the iptables/ip6tables rule.
     $FULL
     return $?
 }
@@ -1437,11 +1448,11 @@ list_running() {
 }
 
 get_subn_iface_from_pid() {
-    list_running | awk '{print $1 " " $NF}' | tr -d '\(\)' | grep -E "^${1} " | cut -d' ' -f2
+    list_running | awk '{print $1 " " $NF}' | tr -d '$begin:math:text$$end:math:text$' | grep -E "^${1} " | cut -d' ' -f2
 }
 
 get_pid_from_subn_iface() {
-    list_running | awk '{print $1 " " $NF}' | tr -d '\(\)' | grep -E " ${1}$" | cut -d' ' -f1
+    list_running | awk '{print $1 " " $NF}' | tr -d '$begin:math:text$$end:math:text$' | grep -E " ${1}$" | cut -d' ' -f1
 }
 
 get_confdir_from_pid() {
@@ -1470,7 +1481,7 @@ print_clients_from_leases() {  # MAC|IP|HOST|lease
         #echo aa$line
         LEASEstamp="$(echo "$line" | awk '{print $1}')"
         MAC="$(echo "$line" | awk '{print $2}')"
-        IP="$(echo "$line" | awk '{print $3}'  | sed 's/\[//g' | sed 's/\]//g')"
+        IP="$(echo "$line" | awk '{print $3}'  | sed 's/$begin:math:display$//g' | sed 's/$end:math:display$//g')"
         HOST="$(echo "$line" | awk '{print $4}' | sed 's/*/?/g' | sed 's/|/_/g' | sed 's/ /_/g' )"
         
         if [[ -n "$MAC" ]]; then
@@ -1594,7 +1605,7 @@ send_stop() {
     fi
 
     # send stop signal to specific interface
-    for x in $(list_running | grep -E " \(?${1}( |\)?\$)" | cut -f1 -d' '); do
+    for x in $(list_running | grep -E " $begin:math:text$?${1}( |$end:math:text$?\$)" | cut -f1 -d' '); do
         kill -USR1 "$x"
     done
 }
